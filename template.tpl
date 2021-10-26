@@ -54,7 +54,7 @@ ___SANDBOXED_JS_FOR_WEB_TEMPLATE___
 const injectScript = require('injectScript');
 const id = data.cookieScanID;
 
-const url = 'https://portal.cookiescan.com/plugins/cookiebanner.js?domainId=' + id;
+const url = 'https://banner.cookiescan.com/gtm?id=' + id;
 injectScript(url, data.gtmOnSuccess, data.gtmOnFailure, url);
 
 
@@ -75,7 +75,7 @@ ___WEB_PERMISSIONS___
             "listItem": [
               {
                 "type": 1,
-                "string": "https://portal.cookiescan.com/plugins/*"
+                "string": "https://banner.cookiescan.com/gtm?id=*"
               }
             ]
           }
