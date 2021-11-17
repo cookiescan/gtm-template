@@ -1,5 +1,7 @@
 homepage: "https://cookiescan.com"
-documentation: "https://cookiescan.com/content/docs/Implementing_CookieScan_using_Google_Tag_Manager.pdf"
+documentation: "https://cdn.cookiescan.com/docs/ImplementCookieScanGTM.pdf"
 versions:
+  - sha: d02cad0894eacfa5e4a5b4ee961f71da29615014
+    changeNotes: Updated plugin URL to new endpoint
   - sha: a44f6705599236b2725ede8fb22c07477ac071f5
     changeNotes: Initial release.
