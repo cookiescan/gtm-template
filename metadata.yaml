@@ -1,6 +1,8 @@
 homepage: "https://cookiescan.com"
 documentation: "https://cdn.cookiescan.com/docs/ImplementCookieScanGTM.pdf"
 versions:
+  - sha: 3f67877b49be1ee7f0bd2f081592199bce8a7335
+    changeNotes: Add Consent Mode initialisation
   - sha: d02cad0894eacfa5e4a5b4ee961f71da29615014
     changeNotes: Updated plugin URL to new endpoint
   - sha: a44f6705599236b2725ede8fb22c07477ac071f5
