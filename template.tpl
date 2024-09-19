@@ -51,20 +51,62 @@ ___TEMPLATE_PARAMETERS___
 
 ___SANDBOXED_JS_FOR_WEB_TEMPLATE___
 
+const log = require('logToConsole');
+log('data =', data);
 const injectScript = require('injectScript');
 const setDefaultConsentState = require('setDefaultConsentState');
+const getCookieValues = require('getCookieValues');
+const JSON = require('JSON');
+
 const id = data.cookieScanID;
-
-setDefaultConsentState({
-  'security_storage': "granted",
-  'functionality_storage': "granted",
-  'ad_storage': "denied",
-  'analytics_storage': "denied",
-  'personalization_storage': "denied",
-  'wait_for_update': 2000,
-});
-
 const url = 'https://banner.cookiescan.com/gtm?id=' + id;
+const COOKIE_NAME = 'cookiescan_consent';
+
+const enableLogging = false;
+
+function customLog(messageToLog) {
+  if (enableLogging) {   
+    log(messageToLog);
+  }
+}
+
+customLog(id);
+customLog(COOKIE_NAME);
+customLog(url);
+
+const userCookie = getCookieValues(COOKIE_NAME);
+const userPreferences = JSON.parse(userCookie);  
+
+customLog(userPreferences);
+
+if (userPreferences != null) {
+  customLog('cookie exists');
+  
+  setDefaultConsentState({
+    'ad_storage': userPreferences.marketing == true ? 'granted' : 'denied',
+    'ad_user_data': userPreferences.marketing == true ? 'granted' : 'denied',
+    'ad_personalization': userPreferences.marketing == true ? 'granted' : 'denied',
+    'analytics_storage': userPreferences.statistics == true ? 'granted' : 'denied',
+    'personalization_storage': userPreferences.preference == true ? 'granted' : 'denied',
+    'functionality_storage': userPreferences.preference == true ? 'granted' : 'denied',
+    'security_storage': userPreferences.preference == true ? 'granted' : 'denied',
+    'wait_for_update': 2000,
+  });
+} else {
+  customLog('cookie doesnt exist');
+  
+  setDefaultConsentState({
+    'ad_storage': "denied",
+    'ad_user_data': "denied",
+    'ad_personalization': "denied",
+    'analytics_storage': "denied",
+    'personalization_storage': "denied",
+    'functionality_storage': "denied",
+    'security_storage': "denied",
+    'wait_for_update': 2000,  
+  });
+}
+
 injectScript(url, data.gtmOnSuccess, data.gtmOnFailure, url);
 
 data.gtmOnSuccess();
@@ -255,6 +297,68 @@ ___WEB_PERMISSIONS___
                   {
                     "type": 1,
                     "string": "security_storage"
+                  },
+                  {
+                    "type": 8,
+                    "boolean": false
+                  },
+                  {
+                    "type": 8,
+                    "boolean": true
+                  }
+                ]
+              },
+              {
+                "type": 3,
+                "mapKey": [
+                  {
+                    "type": 1,
+                    "string": "consentType"
+                  },
+                  {
+                    "type": 1,
+                    "string": "read"
+                  },
+                  {
+                    "type": 1,
+                    "string": "write"
+                  }
+                ],
+                "mapValue": [
+                  {
+                    "type": 1,
+                    "string": "ad_user_data"
+                  },
+                  {
+                    "type": 8,
+                    "boolean": false
+                  },
+                  {
+                    "type": 8,
+                    "boolean": true
+                  }
+                ]
+              },
+              {
+                "type": 3,
+                "mapKey": [
+                  {
+                    "type": 1,
+                    "string": "consentType"
+                  },
+                  {
+                    "type": 1,
+                    "string": "read"
+                  },
+                  {
+                    "type": 1,
+                    "string": "write"
+                  }
+                ],
+                "mapValue": [
+                  {
+                    "type": 1,
+                    "string": "ad_personalization"
                   },
                   {
                     "type": 8,
