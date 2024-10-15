@@ -48,70 +48,196 @@ ___TEMPLATE_PARAMETERS___
       }
     ],
     "help": "Your CookieScan ID, found in the CookieScan Portal when managing your site."
+  },
+  {
+    "type": "PARAM_TABLE",
+    "name": "defaultSettings",
+    "displayName": "Default settings",
+    "paramTableColumns": [
+      {
+        "param": {
+          "type": "TEXT",
+          "name": "region",
+          "displayName": "Region (leave blank to have consent apply to all regions)",
+          "simpleValueType": true
+        },
+        "isUnique": true
+      },
+      {
+        "param": {
+          "type": "TEXT",
+          "name": "granted",
+          "displayName": "Granted Consent Types (comma separated)",
+          "simpleValueType": true
+        },
+        "isUnique": false
+      },
+      {
+        "param": {
+          "type": "TEXT",
+          "name": "denied",
+          "displayName": "Denied Consent Types (comma separated)",
+          "simpleValueType": true
+        },
+        "isUnique": false
+      }
+    ],
+    "newRowButtonText": "Add Region"
+  },
+  {
+    "type": "CHECKBOX",
+    "name": "consentModeEnabled",
+    "checkboxText": "Enable Google Consent Mode",
+    "simpleValueType": true,
+    "help": "Enable Consent Mode if one or more of your tags rely on Google\u0027s consent API. CookieScan will then automatically signal the user\u0027s consent to these tags.",
+    "defaultValue": true,
+    "alwaysInSummary": true
   }
 ]
 
 
 ___SANDBOXED_JS_FOR_WEB_TEMPLATE___
 
+// The first two lines are optional, use if you want to enable logging
 const log = require('logToConsole');
 log('data =', data);
 const injectScript = require('injectScript');
 const setDefaultConsentState = require('setDefaultConsentState');
+const updateConsentState = require('updateConsentState');
 const getCookieValues = require('getCookieValues');
+const callInWindow = require('callInWindow');
 const JSON = require('JSON');
 
+const gtagSet = require('gtagSet');
+const COOKIE_NAME = 'cookiescan_consent';
 const id = data.cookieScanID;
 const url = 'https://banner.cookiescan.com/gtm?id=' + id;
-const COOKIE_NAME = 'cookiescan_consent';
+const consentModeEnabled = data.consentModeEnabled;
 
-const enableLogging = false;
-
-function customLog(messageToLog) {
-  if (enableLogging) {   
-    log(messageToLog);
+/*
+ *   Splits the input string using comma as a delimiter, returning an array of
+ *   strings
+ */
+const splitInput = (input) => {
+  return input.split(',')
+    .map(entry => entry.trim())
+    .filter(entry => entry.length !== 0);
+};
+/*
+ *   Processes a row of input from the default settings table, returning an object
+ *   which can be passed as an argument to setDefaultConsentState
+ */
+const parseCommandData = (settings) => {
+  const regions = splitInput(settings.region);
+  const granted = splitInput(settings.granted);
+  const denied = splitInput(settings.denied);
+  const commandData = {};
+  if (regions.length > 0) {
+    commandData.region = regions;
   }
-}
-
-customLog(id);
-customLog(COOKIE_NAME);
-customLog(url);
-
-const userCookie = getCookieValues(COOKIE_NAME);
-const userPreferences = JSON.parse(userCookie);  
-
-customLog(userPreferences);
-
-if (userPreferences != null) {
-  customLog('cookie exists');
-  
-  setDefaultConsentState({
-    'ad_storage': userPreferences.marketing == true ? 'granted' : 'denied',
-    'ad_user_data': userPreferences.marketing == true ? 'granted' : 'denied',
-    'ad_personalization': userPreferences.marketing == true ? 'granted' : 'denied',
-    'analytics_storage': userPreferences.statistics == true ? 'granted' : 'denied',
-    'personalization_storage': userPreferences.preference == true ? 'granted' : 'denied',
-    'functionality_storage': userPreferences.preference == true ? 'granted' : 'denied',
-    'security_storage': userPreferences.preference == true ? 'granted' : 'denied',
-    'wait_for_update': 2000,
+  granted.forEach(entry => {
+    commandData[entry] = 'granted';
   });
-} else {
-  customLog('cookie doesnt exist');
-  
-  setDefaultConsentState({
-    'ad_storage': "denied",
-    'ad_user_data': "denied",
-    'ad_personalization': "denied",
-    'analytics_storage': "denied",
-    'personalization_storage': "denied",
-    'functionality_storage': "denied",
-    'security_storage': "denied",
-    'wait_for_update': 2000,  
+  denied.forEach(entry => {
+    commandData[entry] = 'denied';
   });
-}
+  return commandData;
+};
+/*
+ *   Called when consent changes. Assumes that consent object contains keys which
+ *   directly correspond to Google consent types.
+ */
+const onUserConsent = (consent) => {
+  const consentModeStates = {
+    ad_storage: consent.marketing ? 'granted' : 'denied',
+    ad_user_data: consent.marketing ? 'granted' : 'denied',
+    ad_personalization: consent.marketing ? 'granted' : 'denied',
+    analytics_storage: consent.statistics ? 'granted' : 'denied',
+    functionality_storage: consent.preference ? 'granted' : 'denied',
+    personalization_storage: consent.preference ? 'granted' : 'denied',
+    security_storage: consent.preference ? 'granted' : 'denied',
+  };
+  log('Consent to update based on user consent preferences:');
+  log(consentModeStates);
+  updateConsentState(consentModeStates);
+};
+
+/*
+ *   Executes the default command, sets the developer ID, and sets up the consent
+ *   update callback
+ */
+const main = (data) => {
+  log('ID: ' + id);
+  log('Cookie name: ' + COOKIE_NAME);
+  log('URL: ' + url);
+
+  /*
+   * Optional settings using gtagSet
+   */
+  // gtagSet('ads_data_redaction', data.ads_data_redaction);
+  // gtagSet('url_passthrough', data.url_passthrough);
+  // gtagSet('developer_id.your_developer_id', true);
+
+  if (consentModeEnabled !== false) {
+    // Set default consent state(s)
+    const regionDefaults = data.defaultSettings || [];
+    if (regionDefaults != null && regionDefaults.length > 0) {
+      regionDefaults.forEach(settings => {
+        const defaultData = parseCommandData(settings);
+        // wait_for_update (ms) allows for time to receive visitor choices from the CMP
+        defaultData.wait_for_update = 500;
+        setDefaultConsentState(defaultData);
+      });
+    } else {
+      setDefaultConsentState({
+        'ad_storage': 'denied',
+        'ad_user_data': 'denied',
+        'ad_personalization': 'denied',
+        'analytics_storage': 'denied',
+        'personalization_storage': 'denied',
+        'functionality_storage': 'denied',
+        'security_storage': 'granted',
+        'wait_for_update': 2000,
+      });
+    }
+
+    // Check if cookie is set and has values that correspond to Google consent
+    // types. If it does, run onUserConsent().
+    const cookiescanConsent = getCookieValues(COOKIE_NAME);
+    log(COOKIE_NAME + ' value:');
+    log(cookiescanConsent);
+
+    if (typeof cookiescanConsent !== 'undefined' || cookiescanConsent.length != 0) {
+      const settings = JSON.parse(cookiescanConsent);
+
+      if (typeof settings !== 'undefined') {
+        log('Parsed cookie preferences:');
+        log(settings);
+        log('Updating consent from ' + COOKIE_NAME + ' cookie preferences');
+        onUserConsent(settings);
+      } else {
+        log(COOKIE_NAME + ' cannot be parsed');
+      }
+    } else {
+      log(COOKIE_NAME + ' cookie not set');
+    }
+    /**
+     *   Add event listener to trigger update when consent changes
+     *
+     *   References an external method on the window object which accepts a
+     *   function as an argument. If you do not have such a method, you will need
+     *   to create one before continuing. This method should add the function
+     *   that is passed as an argument as a callback for an event emitted when
+     *   the user updates their consent. The callback should be called with an
+     *   object containing fields that correspond to the five built-in Google
+     *   consent types.
+     */
+    callInWindow('cookiescanGCMConsentListener', onUserConsent);
+  }
+};
 
 injectScript(url, data.gtmOnSuccess, data.gtmOnFailure, url);
-
+main(data);
 data.gtmOnSuccess();
 
 
@@ -365,7 +491,7 @@ ___WEB_PERMISSIONS___
                   },
                   {
                     "type": 8,
-                    "boolean": true
+                    "boolean": false
                   },
                   {
                     "type": 8,
@@ -396,7 +522,7 @@ ___WEB_PERMISSIONS___
                   },
                   {
                     "type": 8,
-                    "boolean": true
+                    "boolean": false
                   },
                   {
                     "type": 8,
@@ -467,6 +593,26 @@ ___WEB_PERMISSIONS___
       "isEditedByUser": true
     },
     "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {
+        "publicId": "access_globals",
+        "versionId": "1"
+      },
+      "param": []
+    },
+    "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {
+        "publicId": "write_data_layer",
+        "versionId": "1"
+      },
+      "param": []
+    },
+    "isRequired": true
   }
 ]
 
@@ -479,5 +625,3 @@ scenarios: []
 ___NOTES___
 
 Created on 8/21/2020, 8:57:55 AM
-
-
