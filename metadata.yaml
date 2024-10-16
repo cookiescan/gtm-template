@@ -2,9 +2,11 @@ homepage: "https://cookiescan.com"
 documentation: "https://cdn.cookiescan.com/docs/ImplementCookieScanGTM.pdf"
 versions:
 # Latest Version
+  - sha: 0461af3f34998516ce1f7345780fc1e90aa3a7d4
+    changeNotes: Support URL passthrough and ads redaction
+# Older Versions
   - sha: 42ae758fe8ab2405477127c42a1258be49e06b5c
     changeNotes: Add Developer ID
-# Older Versions
   - sha: 4544cae95c562b11666a2109e493aa01e718f295
     changeNotes: Support region specific default consent
   - sha: a01e0c47d41057f04ba33ed85b412b20ecd9ef82
