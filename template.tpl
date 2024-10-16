@@ -92,6 +92,28 @@ ___TEMPLATE_PARAMETERS___
     "help": "Enable Consent Mode if one or more of your tags rely on Google\u0027s consent API. CookieScan will then automatically signal the user\u0027s consent to these tags.",
     "defaultValue": true,
     "alwaysInSummary": true
+  },
+  {
+    "type": "GROUP",
+    "name": "otherSettings",
+    "displayName": "Other Settings",
+    "groupStyle": "ZIPPY_CLOSED",
+    "subParams": [
+      {
+        "type": "CHECKBOX",
+        "name": "urlPassThrough",
+        "checkboxText": "Pass ad click information through URLs",
+        "simpleValueType": true,
+        "help": "Check this option if you would like internal links to include advertising identifiers (such as gclid, dclid, gclsrc, and _gl) in their URLs while waiting for consent to be granted."
+      },
+      {
+        "type": "CHECKBOX",
+        "name": "adsDataRedaction",
+        "checkboxText": "Redact ads data",
+        "simpleValueType": true,
+        "help": "When ad_storage is denied, no new cookies are set for advertising purposes. Additionally, third-party cookies previously set on google.com and doubleclick.net won\u0027t be used. Data sent to Google will still include the full page URL, including any ad click information in the URL parameters.\n\nTo further redact your ads data when ad_storage is denied, set ads_data_redaction to true.\n\nWhen ads_data_redaction is true and ad_storage is denied, ad click identifiers sent in network requests by Google Ads and Floodlight tags will be redacted."
+      }
+    ]
   }
 ]
 
@@ -174,8 +196,14 @@ const main = (data) => {
   /*
    * Optional settings using gtagSet
    */
-  // gtagSet('ads_data_redaction', data.ads_data_redaction);
-  // gtagSet('url_passthrough', data.url_passthrough);
+  if (data.adsDataRedaction === true) {
+    gtagSet('ads_data_redaction', true);
+  }
+  
+  if (data.urlPassThrough === true) {
+    gtagSet('url_passthrough', true);  
+  }
+  
   gtagSet('developer_id.dNmFmZD', true);
 
   if (consentModeEnabled !== false) {
@@ -670,6 +698,14 @@ ___WEB_PERMISSIONS___
               {
                 "type": 1,
                 "string": "developer_id.dNmFmZD"
+              },
+              {
+                "type": 1,
+                "string": "ads_data_redaction"
+              },
+              {
+                "type": 1,
+                "string": "url_passthrough"
               }
             ]
           }
@@ -692,3 +728,5 @@ scenarios: []
 ___NOTES___
 
 Created on 8/21/2020, 8:57:55 AM
+
+
