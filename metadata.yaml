@@ -1,5 +1,5 @@
 homepage: "https://cookiescan.com"
-documentation: "https://cdn.cookiescan.com/docs/ImplementCookieScanGTM.pdf"
+documentation: "https://support.cookiescan.com/hc/en-gb/articles/10149748271517-Implement-using-the-Google-Tag-Manager-integration"
 versions:
 # Latest Version
   - sha: 0461af3f34998516ce1f7345780fc1e90aa3a7d4
