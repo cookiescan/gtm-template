@@ -53,12 +53,13 @@ ___TEMPLATE_PARAMETERS___
     "type": "PARAM_TABLE",
     "name": "defaultSettings",
     "displayName": "Default settings",
+    "help": "Optional. Add a row for each set of regions that needs its own Consent Mode default. In every row, list ad_storage, analytics_storage, ad_user_data and ad_personalization, plus functionality_storage and personalization_storage if your tags use them: a type left out of a row gets no default in those regions. Also add a row with a blank Region, which applies to every region you have not listed. With no rows, every consent type defaults to denied everywhere, except security_storage, which is always granted.",
     "paramTableColumns": [
       {
         "param": {
           "type": "TEXT",
           "name": "region",
-          "displayName": "Region (leave blank to have consent apply to all regions)",
+          "displayName": "Region: country codes (e.g. GB, FR) or ISO 3166-2 subdivision codes (e.g. US-CA), comma separated. Leave blank to apply to all regions.",
           "simpleValueType": true
         },
         "isUnique": true
@@ -131,6 +132,8 @@ const callInWindow = require('callInWindow');
 const JSON = require('JSON');
 
 const gtagSet = require('gtagSet');
+const setInWindow = require('setInWindow');
+const templateStorage = require('templateStorage');
 const COOKIE_NAME = 'cookiescan_consent';
 const id = data.cookieScanID;
 const url = 'https://banner.cookiescan.com/gtm?id=' + id;
@@ -166,8 +169,8 @@ const parseCommandData = (settings) => {
   return commandData;
 };
 /*
- *   Called when consent changes. Assumes that consent object contains keys which
- *   directly correspond to Google consent types.
+ *   Called with the visitor's CookieScan category choices ({marketing, statistics,
+ *   preference}) and maps them to Google consent types.
  */
 const onUserConsent = (consent) => {
   const consentModeStates = {
@@ -177,7 +180,8 @@ const onUserConsent = (consent) => {
     analytics_storage: consent.statistics ? 'granted' : 'denied',
     functionality_storage: consent.preference ? 'granted' : 'denied',
     personalization_storage: consent.preference ? 'granted' : 'denied',
-    security_storage: consent.preference ? 'granted' : 'denied',
+    // Security storage is strictly necessary, so it is always granted
+    security_storage: 'granted',
   };
   log('Consent to update based on user consent preferences:');
   log(consentModeStates);
@@ -229,18 +233,16 @@ const main = (data) => {
       });
     }
 
-    // Check if cookie is set and has values that correspond to Google consent
-    // types. If it does, run onUserConsent().
-    const cookiescanConsent = getCookieValues(COOKIE_NAME);
+    // A returning visitor has a stored choice: apply it straight away. A first-time
+    // visitor keeps the default until they interact with the banner.
+    const cookieValues = getCookieValues(COOKIE_NAME);
     log(COOKIE_NAME + ' value:');
-    log(cookiescanConsent);
+    log(cookieValues);
 
-    if (typeof cookiescanConsent !== 'undefined' || cookiescanConsent.length != 0) {
-      const settings = JSON.parse(cookiescanConsent);
+    if (cookieValues && cookieValues.length > 0) {
+      const settings = JSON.parse(cookieValues[0]);
 
-      if (typeof settings !== 'undefined') {
-        log('Parsed cookie preferences:');
-        log(settings);
+      if (settings) {
         log('Updating consent from ' + COOKIE_NAME + ' cookie preferences');
         onUserConsent(settings);
       } else {
@@ -249,23 +251,43 @@ const main = (data) => {
     } else {
       log(COOKIE_NAME + ' cookie not set');
     }
-    /**
-     *   Add event listener to trigger update when consent changes
-     *
-     *   References an external method on the window object which accepts a
-     *   function as an argument. If you do not have such a method, you will need
-     *   to create one before continuing. This method should add the function
-     *   that is passed as an argument as a callback for an event emitted when
-     *   the user updates their consent. The callback should be called with an
-     *   object containing fields that correspond to the five built-in Google
-     *   consent types.
-     */
+  }
+};
+
+/*
+ *   Runs once the CookieScan script has loaded. The script defines
+ *   cookiescanGCMConsentListener, which calls onUserConsent whenever the visitor
+ *   makes a choice on the banner, so it can only be registered after the script
+ *   is on the page.
+ */
+const onScriptLoaded = () => {
+  if (consentModeEnabled !== false) {
     callInWindow('cookiescanGCMConsentListener', onUserConsent);
   }
 };
 
-injectScript(url, data.gtmOnSuccess, data.gtmOnFailure, url);
-main(data);
+const onScriptFailed = () => {
+  log('CookieScan script failed to load: ' + url);
+};
+
+// The tag is meant to fire once per page, on Consent Initialization - All Pages. If a
+// container fires it again, don't repeat the default after tags have run or register a
+// second listener.
+if (templateStorage.getItem('initialised')) {
+  log('CookieScan tag already fired on this page');
+} else {
+  templateStorage.setItem('initialised', true);
+  main(data);
+  if (consentModeEnabled !== false) {
+    // Tells the CookieScan script that this template owns the consent default and
+    // updates, so the script does not send its own gtag consent commands as well
+    setInWindow('cookiescanGtmTemplate', true, true);
+  }
+  injectScript(url, onScriptLoaded, onScriptFailed, url);
+}
+
+// Report success straight away, so tags sequenced after this one don't wait on the
+// banner script's network request (or fail when an ad blocker blocks it)
 data.gtmOnSuccess();
 
 
@@ -672,6 +694,45 @@ ___WEB_PERMISSIONS___
                     "boolean": true
                   }
                 ]
+              },
+              {
+                "type": 3,
+                "mapKey": [
+                  {
+                    "type": 1,
+                    "string": "key"
+                  },
+                  {
+                    "type": 1,
+                    "string": "read"
+                  },
+                  {
+                    "type": 1,
+                    "string": "write"
+                  },
+                  {
+                    "type": 1,
+                    "string": "execute"
+                  }
+                ],
+                "mapValue": [
+                  {
+                    "type": 1,
+                    "string": "cookiescanGtmTemplate"
+                  },
+                  {
+                    "type": 8,
+                    "boolean": false
+                  },
+                  {
+                    "type": 8,
+                    "boolean": true
+                  },
+                  {
+                    "type": 8,
+                    "boolean": false
+                  }
+                ]
               }
             ]
           }
@@ -680,6 +741,16 @@ ___WEB_PERMISSIONS___
     },
     "clientAnnotations": {
       "isEditedByUser": true
+    },
+    "isRequired": true
+  },
+  {
+    "instance": {
+      "key": {
+        "publicId": "access_template_storage",
+        "versionId": "1"
+      },
+      "param": []
     },
     "isRequired": true
   },
@@ -722,7 +793,146 @@ ___WEB_PERMISSIONS___
 
 ___TESTS___
 
-scenarios: []
+scenarios:
+- name: No region rows - everything denied by default, developer ID set, script injected
+  code: |-
+    runCode(mockData);
+
+    assertApi('setDefaultConsentState').wasCalledWith({
+      'ad_storage': 'denied',
+      'ad_user_data': 'denied',
+      'ad_personalization': 'denied',
+      'analytics_storage': 'denied',
+      'personalization_storage': 'denied',
+      'functionality_storage': 'denied',
+      'security_storage': 'granted',
+      'wait_for_update': 2000,
+    });
+    assertApi('gtagSet').wasCalledWith('developer_id.dNmFmZD', true);
+    assertApi('setInWindow').wasCalledWith('cookiescanGtmTemplate', true, true);
+    assertThat(injectedUrl).isEqualTo('https://banner.cookiescan.com/gtm?id=06-689803');
+    assertApi('updateConsentState').wasNotCalled();
+    // Reported straight away, without waiting for the banner script to load
+    assertApi('gtmOnSuccess').wasCalled();
+- name: Region rows - one default command per row, with its regions
+  code: |-
+    mockData.defaultSettings = [
+      {region: 'GB, FR', granted: '', denied: 'ad_storage, analytics_storage, ad_user_data, ad_personalization'},
+      {region: '', granted: 'ad_storage, analytics_storage, ad_user_data, ad_personalization', denied: ''},
+    ];
+
+    runCode(mockData);
+
+    assertApi('setDefaultConsentState').wasCalledWith({
+      'region': ['GB', 'FR'],
+      'ad_storage': 'denied',
+      'analytics_storage': 'denied',
+      'ad_user_data': 'denied',
+      'ad_personalization': 'denied',
+      'wait_for_update': 500,
+    });
+    assertApi('setDefaultConsentState').wasCalledWith({
+      'ad_storage': 'granted',
+      'analytics_storage': 'granted',
+      'ad_user_data': 'granted',
+      'ad_personalization': 'granted',
+      'wait_for_update': 500,
+    });
+- name: Returning visitor - stored choice applied as an update
+  code: |-
+    mock('getCookieValues', ['{"marketing":true,"statistics":false,"preference":false}']);
+
+    runCode(mockData);
+
+    assertApi('updateConsentState').wasCalledWith({
+      'ad_storage': 'granted',
+      'ad_user_data': 'granted',
+      'ad_personalization': 'granted',
+      'analytics_storage': 'denied',
+      'functionality_storage': 'denied',
+      'personalization_storage': 'denied',
+      'security_storage': 'granted',
+    });
+- name: Listener registered only once the script has loaded, and applies the visitor's choice
+  code: |-
+    runCode(mockData);
+
+    // The script defines the listener function, so nothing is registered until it loads
+    assertApi('callInWindow').wasNotCalled();
+    injectedOnSuccess();
+    assertApi('callInWindow').wasCalled();
+    registeredListener({marketing: false, statistics: true, preference: false});
+    assertApi('updateConsentState').wasCalledWith({
+      'ad_storage': 'denied',
+      'ad_user_data': 'denied',
+      'ad_personalization': 'denied',
+      'analytics_storage': 'granted',
+      'functionality_storage': 'denied',
+      'personalization_storage': 'denied',
+      'security_storage': 'granted',
+    });
+- name: Consent Mode disabled - no consent commands, script still loads
+  code: |-
+    mockData.consentModeEnabled = false;
+    mock('getCookieValues', ['{"marketing":true,"statistics":true,"preference":true}']);
+
+    runCode(mockData);
+    injectedOnSuccess();
+
+    assertApi('setDefaultConsentState').wasNotCalled();
+    assertApi('updateConsentState').wasNotCalled();
+    // The script keeps sending its own consent commands (per the Portal setting)
+    assertApi('setInWindow').wasNotCalled();
+    assertApi('callInWindow').wasNotCalled();
+    assertApi('injectScript').wasCalled();
+    assertApi('gtmOnSuccess').wasCalled();
+- name: Script blocked - tag still succeeds, no listener
+  code: |-
+    runCode(mockData);
+    injectedOnFailure();
+
+    assertApi('gtmOnSuccess').wasCalled();
+    assertApi('gtmOnFailure').wasNotCalled();
+    assertApi('callInWindow').wasNotCalled();
+- name: Tag fired twice on one page - default and script only once
+  code: |-
+    let defaults = 0;
+    mock('setDefaultConsentState', () => { defaults++; });
+    let injections = 0;
+    mock('injectScript', () => { injections++; });
+
+    runCode(mockData);
+    runCode(mockData);
+
+    assertThat(defaults).isEqualTo(1);
+    assertThat(injections).isEqualTo(1);
+setup: |-
+  const mockData = {
+    cookieScanID: '06-689803',
+    consentModeEnabled: true,
+    defaultSettings: [],
+    urlPassThrough: false,
+    adsDataRedaction: false,
+  };
+
+  // Hold on to the load callbacks so each test decides when (and whether) the script loads
+  let injectedUrl;
+  let injectedOnSuccess;
+  let injectedOnFailure;
+  mock('injectScript', (url, onSuccess, onFailure) => {
+    injectedUrl = url;
+    injectedOnSuccess = onSuccess;
+    injectedOnFailure = onFailure;
+  });
+
+  let registeredListener;
+  mock('callInWindow', (name, listener) => {
+    if (name === 'cookiescanGCMConsentListener') {
+      registeredListener = listener;
+    }
+  });
+
+  mock('getCookieValues', []);
 
 
 ___NOTES___

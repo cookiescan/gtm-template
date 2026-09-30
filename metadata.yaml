@@ -1,10 +1,17 @@
 homepage: "https://cookiescan.com"
-documentation: "https://cdn.cookiescan.com/docs/ImplementCookieScanGTM.pdf"
+documentation: "https://support.cookiescan.com/hc/en-gb/articles/10149748271517-Implement-using-the-Google-Tag-Manager-integration"
 versions:
 # Latest Version
+  - sha: 70b1bf17b8ed6a480d051e53c6be87ea72c2f514
+    changeNotes: >-
+      Consent updates now reach Google tags when visitors choose on the banner
+      (listener registered once the CookieScan script has loaded). security_storage
+      is always granted. Returning visitors' stored choice is read correctly. The
+      CookieScan script no longer sends a second consent default. Clearer region
+      settings help. Requires the CookieScan banner released October 2026.
+# Older Versions
   - sha: 0461af3f34998516ce1f7345780fc1e90aa3a7d4
     changeNotes: Support URL passthrough and ads redaction
-# Older Versions
   - sha: 42ae758fe8ab2405477127c42a1258be49e06b5c
     changeNotes: Add Developer ID
   - sha: 4544cae95c562b11666a2109e493aa01e718f295
